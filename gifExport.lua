@@ -143,7 +143,8 @@ dlg:button {
         local quantizePrefs <const> = appPrefs.quantization
 
         local oldTool <const> = app.tool
-        if oldTool.id == "slice" then
+        if oldTool.id == "slice"
+            or oldTool.id == "text" then
             app.tool = "hand"
         end
 
