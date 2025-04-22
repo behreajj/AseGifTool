@@ -273,7 +273,7 @@ dlg:button {
 
         local docPrefs <const> = appPrefs.document(trgSprite)
         local saveCopyPrefs <const> = docPrefs.save_copy
-        saveCopyPrefs.apply_pixel_ratio = true
+        saveCopyPrefs.apply_pixel_ratio = false
         saveCopyPrefs.for_twitter = false
 
         local oldShowAlert <const> = gifPrefs.show_alert
