@@ -1,3 +1,8 @@
+--[[
+Aseprite's gif encoder, specifically calculateDeltaImageFrameBoundsDisposal:
+https://github.com/aseprite/aseprite/blob/main/src/app/file/gif_format.cpp#L1136
+]]
+
 local ditherOptions <const> = { "BAYER", "FLOYD_STEINBERG", "NONE" }
 local fitOptions <const> = { "CIE_LAB", "CIE_XYZ", "LINEAR_RGB", "GAMMA_RGB" }
 
