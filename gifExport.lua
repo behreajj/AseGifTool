@@ -15,6 +15,7 @@ local defaults <const> = {
     useLoop = true,
     force332 = false,
     applyPixelRatio = true,
+    preserveAlpha = true,
 }
 
 local dlg <const> = Dialog { title = "Gif Export" }
@@ -234,6 +235,12 @@ dlg:button {
             end
         end)
 
+        local preserveAlpha <const> = defaults.preserveAlpha
+        local preserveAlphaVerif <const> = preserveAlpha
+            and dither ~= "FLOYD_STEINBERG"
+        local layer <const> = trgSprite.layers[1]
+        local lenFrObjs <const> = #trgSprite.frames
+
         local ditherStr = "none"
         if dither == "BAYER" then
             ditherStr = "ordered"
@@ -261,6 +268,68 @@ dlg:button {
             }
         end
 
+        ---@type boolean[][]
+        local alphaMasks <const> = { {} }
+        if preserveAlphaVerif then
+            local noDither <const> = ditherStr == "none"
+            local matrix <const> = {
+                8, 135, 40, 167,
+                199, 72, 231, 104,
+                56, 183, 24, 151,
+                247, 120, 215, 88,
+            }
+            local cols <const> = 4
+            local rows <const> = 4
+
+            -- local matrix <const> = {
+            --     2, 129, 34, 161, 10, 137, 42, 169,
+            --     193, 66, 225, 98, 201, 74, 233, 106,
+            --     50, 177, 18, 145, 58, 185, 26, 153,
+            --     241, 114, 209, 82, 249, 122, 217, 90,
+            --     14, 141, 46, 173, 6, 133, 38, 165,
+            --     205, 78, 237, 110, 197, 70, 229, 102,
+            --     62, 189, 30, 157, 54, 181, 22, 149,
+            --     253, 126, 221, 94, 245, 118, 213, 86,
+            -- }
+            -- local cols <const> = 8
+            -- local rows <const> = 8
+
+            local strbyte <const> = string.byte
+
+            local i = 0
+            while i < lenFrObjs do
+                i = i + 1
+
+                ---@type boolean[]
+                local alphaMasksFrame <const> = {}
+                local cel <const> = layer:cel(i)
+                if cel then
+                    local pos <const> = cel.position
+                    local xtl <const> = pos.x
+                    local ytl <const> = pos.y
+
+                    local srcImg <const> = cel.image
+                    local srcBytes <const> = srcImg.bytes
+                    local wImg <const> = srcImg.width
+                    local hImg <const> = srcImg.height
+                    local areaImg <const> = wImg * hImg
+
+                    local j = 0
+                    while j < areaImg do
+                        local a8 <const> = strbyte(srcBytes, 4 + j * 4)
+                        local x <const> = xtl + j % wImg
+                        local y <const> = ytl + j // wImg
+                        local idx <const> = 1 + (x % cols) + (y % rows) * cols
+                        local thresh <const> = noDither and 128 or matrix[idx]
+                        j = j + 1
+                        alphaMasksFrame[j] = a8 >= thresh
+                    end -- End pixels loop.
+                end     -- End cel exists.
+
+                alphaMasks[i] = alphaMasksFrame
+            end -- End frames loop.
+        end     -- End preserve alpha.
+
         app.command.ChangePixelFormat {
             ui = false,
             fitCriteria = fitStr,
@@ -269,6 +338,43 @@ dlg:button {
             ditheringFactor = dithFac100 * 0.01,
             rgbmap = "octree",
         }
+
+        if preserveAlphaVerif then
+            app.transaction("Threshold Alpha", function()
+                local strbyte <const> = string.byte
+                local strchar <const> = string.char
+                local tconcat <const> = table.concat
+
+                local i = 0
+                while i < lenFrObjs do
+                    i = i + 1
+
+                    local cel <const> = layer:cel(i)
+                    if cel then
+                        local alphaMaskFrame <const> = alphaMasks[i]
+                        local areaImg <const> = #alphaMaskFrame
+
+                        ---@type string[]
+                        local trgByteStrs <const> = {}
+                        local srcImg <const> = cel.image
+                        local srcBytes <const> = srcImg.bytes
+
+                        local j = 0
+                        while j < areaImg do
+                            j = j + 1
+                            -- Should be safe to assume that alpha index is 0.
+                            trgByteStrs[j] = strchar(alphaMaskFrame[j]
+                                and strbyte(srcBytes, j)
+                                or 0)
+                        end -- End pixels loop.
+
+                        local trgImg <const> = Image(srcImg.spec)
+                        trgImg.bytes = tconcat(trgByteStrs)
+                        cel.image = trgImg
+                    end -- End cel exists.
+                end     -- End frames loop.
+            end)        -- End transaction.
+        end             -- End preserve alpha.
 
         app.command.SpriteSize {
             ui = false,
@@ -300,7 +406,7 @@ dlg:button {
         gifPrefs.loop = oldLoop
         gifPrefs.preserve_palette_order = oldPreserveOrder
 
-        trgSprite:close()
+        -- trgSprite:close()
         app.sprite = srcSprite
         app.tool = oldTool
 
