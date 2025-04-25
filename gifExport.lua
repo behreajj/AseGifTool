@@ -47,6 +47,14 @@ dlg:combobox {
     option = defaults.dither,
     options = ditherOptions,
     focus = false,
+    onchange = function()
+        local args <const> = dlg.data
+        local dither <const> = args.dither --[[@as string]]
+        dlg:modify {
+            id = "preserveAlpha",
+            visible = dither ~= "FLOYD_STEINBERG"
+        }
+    end
 }
 
 dlg:newrow { always = false }
@@ -68,6 +76,17 @@ dlg:slider {
     min = 0,
     max = 100,
     focus = false,
+}
+
+dlg:newrow { always = false }
+
+dlg:check {
+    id = "preserveAlpha",
+    label = "Keep:",
+    text = "Alpha",
+    selected = defaults.preserveAlpha,
+    focus = false,
+    visible = defaults.dither ~= "FLOYD_STEINBERG"
 }
 
 dlg:newrow { always = false }
@@ -126,6 +145,7 @@ dlg:button {
             or defaults.scale --[[@as integer]]
         local dither <const> = args.dither
             or defaults.dither --[[@as string]]
+        local preserveAlpha <const> = args.preserveAlpha --[[@as boolean]]
         local fit <const> = args.fit
             or defaults.fit --[[@as string]]
         local dithFac100 <const> = args.dithFac100
@@ -235,7 +255,6 @@ dlg:button {
             end
         end)
 
-        local preserveAlpha <const> = defaults.preserveAlpha
         local preserveAlphaVerif <const> = preserveAlpha
             and dither ~= "FLOYD_STEINBERG"
         local layer <const> = trgSprite.layers[1]
@@ -280,20 +299,6 @@ dlg:button {
             }
             local cols <const> = 4
             local rows <const> = 4
-
-            -- local matrix <const> = {
-            --     2, 129, 34, 161, 10, 137, 42, 169,
-            --     193, 66, 225, 98, 201, 74, 233, 106,
-            --     50, 177, 18, 145, 58, 185, 26, 153,
-            --     241, 114, 209, 82, 249, 122, 217, 90,
-            --     14, 141, 46, 173, 6, 133, 38, 165,
-            --     205, 78, 237, 110, 197, 70, 229, 102,
-            --     62, 189, 30, 157, 54, 181, 22, 149,
-            --     253, 126, 221, 94, 245, 118, 213, 86,
-            -- }
-            -- local cols <const> = 8
-            -- local rows <const> = 8
-
             local strbyte <const> = string.byte
 
             local i = 0
@@ -406,7 +411,7 @@ dlg:button {
         gifPrefs.loop = oldLoop
         gifPrefs.preserve_palette_order = oldPreserveOrder
 
-        -- trgSprite:close()
+        trgSprite:close()
         app.sprite = srcSprite
         app.tool = oldTool
 
