@@ -35,7 +35,7 @@ Below is a summary of what the script does:
 
 For more on different gif headers, see [https://www.w3.org/Graphics/GIF/spec-gif89a.txt](https://www.w3.org/Graphics/GIF/spec-gif89a.txt).
 
-Aseprite's implementation of [Bayer ordered dithering](https://en.wikipedia.org/wiki/Ordered_dithering) does not support alpha. However, it provides a more stable pattern for animations than [Floyd-Steinberg](https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering) error diffusion dithering. The script provides an option to dither alpha separately.
+Aseprite's implementation of [Bayer ordered dithering](https://en.wikipedia.org/wiki/Ordered_dithering) does not support translucency. However, it provides a more stable pattern for animations than [Floyd-Steinberg](https://en.wikipedia.org/wiki/Floyd%E2%80%93Steinberg_dithering) error diffusion dithering. The script provides an option to dither alpha separately.
 
 ## Comparison
 
