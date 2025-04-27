@@ -18,6 +18,57 @@ local defaults <const> = {
     preserveAlpha = true,
 }
 
+---@param layer Layer parent layer
+---@param leaves Layer[] leaves array
+---@param groups Layer[] groups array
+---@param includeTiles? boolean include tile maps
+---@param includeBkg? boolean include backgrounds
+local function appendLayers(
+    layer, leaves, groups,
+    includeTiles, includeBkg)
+    if layer.isGroup then
+        local childLayers <const> = layer.layers
+        if childLayers then
+            local lenChildLayers <const> = #childLayers
+            local i = 0
+            while i < lenChildLayers do
+                i = i + 1
+                appendLayers(childLayers[i],
+                    leaves, groups,
+                    includeTiles, includeBkg)
+            end
+        end
+        groups[#groups + 1] = layer
+    elseif (not layer.isReference)
+        and (includeTiles or (not layer.isTilemap))
+        and (includeBkg or (not layer.isBackground)) then
+        leaves[#leaves + 1] = layer
+    end
+    return leaves
+end
+
+---@param sprite Sprite sprite
+---@param includeTiles? boolean include tile maps
+---@param includeBkg? boolean include backgrounds
+---@return Layer[] leaves
+---@return Layer[] groups
+---@nodiscard
+local function layerHierarchy(sprite, includeTiles, includeBkg)
+    ---@type Layer[]
+    local leaves <const> = {}
+    ---@type Layer[]
+    local groups <const> = {}
+    local layers <const> = sprite.layers
+    local lenLayers <const> = #layers
+    local i = 0
+    while i < lenLayers do
+        i = i + 1
+        appendLayers(layers[i], leaves, groups,
+            includeTiles, includeBkg)
+    end
+    return leaves, groups
+end
+
 local dlg <const> = Dialog { title = "Gif Export" }
 
 dlg:file {
@@ -164,24 +215,6 @@ dlg:button {
             return
         end
 
-        local topSrcLayers <const> = srcSprite.layers
-        local lenTopSrcLayers <const> = #topSrcLayers
-        local anyVisible = false
-        local g = 0
-        while g < lenTopSrcLayers do
-            g = g + 1
-            local topSrcLayer <const> = topSrcLayers[g]
-            anyVisible = anyVisible or topSrcLayer.isVisible
-        end
-
-        if (not anyVisible) then
-            app.alert {
-                title = "Error",
-                text = "No layers are visible."
-            }
-            return
-        end
-
         local appPrefs <const> = app.preferences
         local gifPrefs <const> = appPrefs.gif
         local quantizePrefs <const> = appPrefs.quantization
@@ -211,15 +244,19 @@ dlg:button {
         app.command.LayerFromBackground()
 
         app.transaction("Delete Hidden Layers", function()
-            local topTrgLayers <const> = trgSprite.layers
-            local lenTopTrgLayers <const> = #topTrgLayers
+            local leaves <const>,
+            groups <const> = layerHierarchy(trgSprite, true, false)
 
-            local i = lenTopTrgLayers + 1
+            local lenLeaves <const> = #leaves
+            local leavesRemaining = lenLeaves
+            local i = lenLeaves + 1
             while i > 1 do
                 i = i - 1
-                local topTrgLayer <const> = topTrgLayers[i]
-                if topTrgLayer.isVisible == false then
-                    trgSprite:deleteLayer(topTrgLayer)
+                local leaf <const> = leaves[i]
+                if leaf.isVisible == false
+                    and leavesRemaining > 1 then
+                    leavesRemaining = leavesRemaining - 1
+                    trgSprite:deleteLayer(leaf)
                 end
             end
         end)
