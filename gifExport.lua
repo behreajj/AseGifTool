@@ -18,6 +18,57 @@ local defaults <const> = {
     preserveAlpha = true,
 }
 
+---@param layer Layer parent layer
+---@param leaves Layer[] leaves array
+---@param groups Layer[] groups array
+---@param includeTiles? boolean include tile maps
+---@param includeBkg? boolean include backgrounds
+local function appendLayers(
+    layer, leaves, groups,
+    includeTiles, includeBkg)
+    if layer.isGroup then
+        local childLayers <const> = layer.layers
+        if childLayers then
+            local lenChildLayers <const> = #childLayers
+            local i = 0
+            while i < lenChildLayers do
+                i = i + 1
+                appendLayers(childLayers[i],
+                    leaves, groups,
+                    includeTiles, includeBkg)
+            end
+        end
+        groups[#groups + 1] = layer
+    elseif (not layer.isReference)
+        and (includeTiles or (not layer.isTilemap))
+        and (includeBkg or (not layer.isBackground)) then
+        leaves[#leaves + 1] = layer
+    end
+    return leaves
+end
+
+---@param sprite Sprite sprite
+---@param includeTiles? boolean include tile maps
+---@param includeBkg? boolean include backgrounds
+---@return Layer[] leaves
+---@return Layer[] groups
+---@nodiscard
+local function layerHierarchy(sprite, includeTiles, includeBkg)
+    ---@type Layer[]
+    local leaves <const> = {}
+    ---@type Layer[]
+    local groups <const> = {}
+    local layers <const> = sprite.layers
+    local lenLayers <const> = #layers
+    local i = 0
+    while i < lenLayers do
+        i = i + 1
+        appendLayers(layers[i], leaves, groups,
+            includeTiles, includeBkg)
+    end
+    return leaves, groups
+end
+
 local dlg <const> = Dialog { title = "Gif Export" }
 
 dlg:file {
@@ -180,6 +231,8 @@ dlg:button {
 
         app.command.DeselectMask()
         local trgSprite <const> = Sprite(srcSprite)
+        trgSprite.filename = app.fs.fileTitle(srcSprite.filename)
+            .. " (Duplicate)"
         trgSprite.pixelRatio = Size(1, 1)
         app.sprite = trgSprite
         app.command.DeselectMask()
@@ -188,8 +241,88 @@ dlg:button {
             and trgSprite.colorMode == ColorMode.RGB
 
         app.command.ChangePixelFormat { ui = false, format = "rgb" }
-        app.command.FlattenLayers { visibleOnly = true }
         app.command.LayerFromBackground()
+
+        app.transaction("Delete Hidden Layers", function()
+            local leaves <const>,
+            groups <const> = layerHierarchy(trgSprite, true, false)
+
+            local lenLeaves <const> = #leaves
+            local i = lenLeaves + 1
+            while i > 1 do
+                i = i - 1
+                local leaf <const> = leaves[i]
+                if leaf.isVisible == false then
+                    trgSprite:deleteLayer(leaf)
+                end
+            end
+
+            local lenGroups <const> = #groups
+            local j = lenGroups + 1
+            while j > 1 do
+                j = j - 1
+                local group <const> = groups[j]
+                if group.isVisible == false then
+                    trgSprite:deleteLayer(group)
+                end
+            end
+        end)
+
+        -- This does not work properly when there are hidden layers.
+        app.command.FlattenLayers { visibleOnly = true }
+
+        local preserveAlphaVerif <const> = preserveAlpha
+            and dither ~= "FLOYD_STEINBERG"
+        local layer <const> = trgSprite.layers[1]
+        local lenFrObjs <const> = #trgSprite.frames
+
+        ---@type boolean[][]
+        local alphaMasks <const> = { {} }
+        if preserveAlphaVerif then
+            local noDither <const> = dither == "NONE"
+            local matrix <const> = {
+                8, 135, 40, 167,
+                199, 72, 231, 104,
+                56, 183, 24, 151,
+                247, 120, 215, 88,
+            }
+            local cols <const> = 4
+            local rows <const> = 4
+            local strbyte <const> = string.byte
+
+            local i = 0
+            while i < lenFrObjs do
+                i = i + 1
+
+                ---@type boolean[]
+                local alphaMasksFrame <const> = {}
+                local cel <const> = layer:cel(i)
+                if cel then
+                    local pos <const> = cel.position
+                    local xtl <const> = pos.x
+                    local ytl <const> = pos.y
+
+                    local srcImg <const> = cel.image
+                    local srcBytes <const> = srcImg.bytes
+                    local wImg <const> = srcImg.width
+                    local hImg <const> = srcImg.height
+                    local areaImg <const> = wImg * hImg
+
+                    local j = 0
+                    while j < areaImg do
+                        local a8 <const> = strbyte(srcBytes, 4 + j * 4)
+                        local x <const> = xtl + j % wImg
+                        local y <const> = ytl + j // wImg
+                        local idx <const> = 1 + (x % cols) + (y % rows) * cols
+                        local thresh <const> = noDither and 128 or matrix[idx]
+                        j = j + 1
+                        alphaMasksFrame[j] = a8 >= thresh
+                    end -- End pixels loop.
+                end     -- End cel exists.
+
+                alphaMasks[i] = alphaMasksFrame
+            end -- End frames loop.
+        end     -- End preserve alpha.
 
         app.transaction("Set Palette", function()
             if force332Verif then
@@ -255,11 +388,6 @@ dlg:button {
             end
         end)
 
-        local preserveAlphaVerif <const> = preserveAlpha
-            and dither ~= "FLOYD_STEINBERG"
-        local layer <const> = trgSprite.layers[1]
-        local lenFrObjs <const> = #trgSprite.frames
-
         local ditherStr = "none"
         if dither == "BAYER" then
             ditherStr = "ordered"
@@ -286,54 +414,6 @@ dlg:button {
                 scaleY = hPixel,
             }
         end
-
-        ---@type boolean[][]
-        local alphaMasks <const> = { {} }
-        if preserveAlphaVerif then
-            local noDither <const> = ditherStr == "none"
-            local matrix <const> = {
-                8, 135, 40, 167,
-                199, 72, 231, 104,
-                56, 183, 24, 151,
-                247, 120, 215, 88,
-            }
-            local cols <const> = 4
-            local rows <const> = 4
-            local strbyte <const> = string.byte
-
-            local i = 0
-            while i < lenFrObjs do
-                i = i + 1
-
-                ---@type boolean[]
-                local alphaMasksFrame <const> = {}
-                local cel <const> = layer:cel(i)
-                if cel then
-                    local pos <const> = cel.position
-                    local xtl <const> = pos.x
-                    local ytl <const> = pos.y
-
-                    local srcImg <const> = cel.image
-                    local srcBytes <const> = srcImg.bytes
-                    local wImg <const> = srcImg.width
-                    local hImg <const> = srcImg.height
-                    local areaImg <const> = wImg * hImg
-
-                    local j = 0
-                    while j < areaImg do
-                        local a8 <const> = strbyte(srcBytes, 4 + j * 4)
-                        local x <const> = xtl + j % wImg
-                        local y <const> = ytl + j // wImg
-                        local idx <const> = 1 + (x % cols) + (y % rows) * cols
-                        local thresh <const> = noDither and 128 or matrix[idx]
-                        j = j + 1
-                        alphaMasksFrame[j] = a8 >= thresh
-                    end -- End pixels loop.
-                end     -- End cel exists.
-
-                alphaMasks[i] = alphaMasksFrame
-            end -- End frames loop.
-        end     -- End preserve alpha.
 
         app.command.ChangePixelFormat {
             ui = false,
