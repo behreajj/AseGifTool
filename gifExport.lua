@@ -164,6 +164,24 @@ dlg:button {
             return
         end
 
+        local topSrcLayers <const> = srcSprite.layers
+        local lenTopSrcLayers <const> = #topSrcLayers
+        local anyVisible = false
+        local g = 0
+        while g < lenTopSrcLayers do
+            g = g + 1
+            local topSrcLayer <const> = topSrcLayers[g]
+            anyVisible = anyVisible or topSrcLayer.isVisible
+        end
+
+        if (not anyVisible) then
+            app.alert {
+                title = "Error",
+                text = "No layers are visible."
+            }
+            return
+        end
+
         local appPrefs <const> = app.preferences
         local gifPrefs <const> = appPrefs.gif
         local quantizePrefs <const> = appPrefs.quantization
@@ -193,15 +211,15 @@ dlg:button {
         app.command.LayerFromBackground()
 
         app.transaction("Delete Hidden Layers", function()
-            local topLayers <const> = trgSprite.layers
-            local lenTopLayers <const> = #topLayers
-            local i = lenTopLayers + 1
+            local topTrgLayers <const> = trgSprite.layers
+            local lenTopTrgLayers <const> = #topTrgLayers
+
+            local i = lenTopTrgLayers + 1
             while i > 1 do
                 i = i - 1
-                local topLayer <const> = topLayers[i]
-                if topLayer.isVisible == false
-                    or topLayer.isReference == true then
-                    trgSprite:deleteLayer(topLayer)
+                local topTrgLayer <const> = topTrgLayers[i]
+                if topTrgLayer.isVisible == false then
+                    trgSprite:deleteLayer(topTrgLayer)
                 end
             end
         end)
@@ -275,11 +293,11 @@ dlg:button {
                     local i <const> = m // 8
                     local j <const> = m % 8
 
-                    local r <const> = floor((j / 7) * 255 + 0.5)
-                    local g <const> = floor((i / 7) * 255 + 0.5)
-                    local b <const> = floor((h / 3) * 255 + 0.5)
+                    local r8 <const> = floor((j / 7) * 255 + 0.5)
+                    local g8 <const> = floor((i / 7) * 255 + 0.5)
+                    local b8 <const> = floor((h / 3) * 255 + 0.5)
 
-                    palette:setColor(k, Color { r = r, g = g, b = b, a = 255 })
+                    palette:setColor(k, Color { r = r8, g = g8, b = b8, a = 255 })
                     k = k + 1
                 end
 
