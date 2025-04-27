@@ -18,57 +18,6 @@ local defaults <const> = {
     preserveAlpha = true,
 }
 
----@param layer Layer parent layer
----@param leaves Layer[] leaves array
----@param groups Layer[] groups array
----@param includeTiles? boolean include tile maps
----@param includeBkg? boolean include backgrounds
-local function appendLayers(
-    layer, leaves, groups,
-    includeTiles, includeBkg)
-    if layer.isGroup then
-        local childLayers <const> = layer.layers
-        if childLayers then
-            local lenChildLayers <const> = #childLayers
-            local i = 0
-            while i < lenChildLayers do
-                i = i + 1
-                appendLayers(childLayers[i],
-                    leaves, groups,
-                    includeTiles, includeBkg)
-            end
-        end
-        groups[#groups + 1] = layer
-    elseif (not layer.isReference)
-        and (includeTiles or (not layer.isTilemap))
-        and (includeBkg or (not layer.isBackground)) then
-        leaves[#leaves + 1] = layer
-    end
-    return leaves
-end
-
----@param sprite Sprite sprite
----@param includeTiles? boolean include tile maps
----@param includeBkg? boolean include backgrounds
----@return Layer[] leaves
----@return Layer[] groups
----@nodiscard
-local function layerHierarchy(sprite, includeTiles, includeBkg)
-    ---@type Layer[]
-    local leaves <const> = {}
-    ---@type Layer[]
-    local groups <const> = {}
-    local layers <const> = sprite.layers
-    local lenLayers <const> = #layers
-    local i = 0
-    while i < lenLayers do
-        i = i + 1
-        appendLayers(layers[i], leaves, groups,
-            includeTiles, includeBkg)
-    end
-    return leaves, groups
-end
-
 local dlg <const> = Dialog { title = "Gif Export" }
 
 dlg:file {
@@ -244,26 +193,15 @@ dlg:button {
         app.command.LayerFromBackground()
 
         app.transaction("Delete Hidden Layers", function()
-            local leaves <const>,
-            groups <const> = layerHierarchy(trgSprite, true, false)
-
-            local lenLeaves <const> = #leaves
-            local i = lenLeaves + 1
+            local topLayers <const> = trgSprite.layers
+            local lenTopLayers <const> = #topLayers
+            local i = lenTopLayers + 1
             while i > 1 do
                 i = i - 1
-                local leaf <const> = leaves[i]
-                if leaf.isVisible == false then
-                    trgSprite:deleteLayer(leaf)
-                end
-            end
-
-            local lenGroups <const> = #groups
-            local j = lenGroups + 1
-            while j > 1 do
-                j = j - 1
-                local group <const> = groups[j]
-                if group.isVisible == false then
-                    trgSprite:deleteLayer(group)
+                local topLayer <const> = topLayers[i]
+                if topLayer.isVisible == false
+                    or topLayer.isReference == true then
+                    trgSprite:deleteLayer(topLayer)
                 end
             end
         end)
